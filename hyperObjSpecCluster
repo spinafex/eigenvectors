@@ -1,0 +1,122 @@
+import networkx as nx
+import matplotlib.pyplot as plt
+from sklearn.cluster import SpectralClustering
+
+# Create a directed graph
+G = nx.DiGraph()
+
+# Define sub-entities for each megatrend
+megatrend_components = {
+    "Climate Change": ["Resource Scarcity", "Geopolitical Shifts", "Economic Impacts", "Technological Needs"],
+    "Decline of US-led World Order": ["Multipolarity", "Great Power Competition", "International Cooperation"],
+    "Rise of Disruptive Tech": ["AI Applications", "Quantum Computing Potential", "Global Intelligence Divide"],
+    "Unintended Consequences of Neoliberal Economic Policies": ["Market Failure", "Economic Inequality", "Deregulation Effects"]
+}
+
+# Add nodes with megatrend attribute
+for megatrend, components in megatrend_components.items():
+    for component in components:
+        G.add_node(component, megatrend=megatrend)
+
+# Define edges with influence types and scores
+edges = [
+    ("Resource Scarcity", "Great Power Competition", "Amplifies", 0.85),
+    ("Geopolitical Shifts", "Multipolarity", "Challenges", 0.60),
+    ("Technological Needs", "AI Applications", "Drives", 0.90),
+    ("Economic Impacts", "Market Failure", "Exposes", 0.70),
+    ("Resource Scarcity", "Economic Inequality", "Challenges", 0.55),
+    ("International Cooperation", "Technological Needs", "Challenges", 0.65),
+    ("Great Power Competition", "AI Applications", "Amplifies", 0.80),
+    ("Multipolarity", "Economic Inequality", "Challenges", 0.50),
+    ("AI Applications", "Technological Needs", "Mitigates", 0.75),
+    ("AI Applications", "Economic Impacts", "Amplifies", 0.45),
+    ("Global Intelligence Divide", "Multipolarity", "Challenges", 0.70),
+    ("AI Applications", "Economic Inequality", "Amplifies", 0.85),
+    ("Deregulation Effects", "Resource Scarcity", "Amplifies", 0.80),
+    ("Economic Inequality", "Great Power Competition", "Amplifies", 0.75),
+    ("Market Failure", "AI Applications", "Drives", 0.60),
+    ("Resource Scarcity", "Geopolitical Shifts", "Amplifies", 0.70),
+    ("AI Applications", "Global Intelligence Divide", "Drives", 0.90),
+    ("Economic Inequality", "Market Failure", "Amplifies", 0.65)
+]
+
+# Add edges with attributes
+for source, target, influence, score in edges:
+    G.add_edge(source, target, influence=influence, score=score)
+
+# Eigenvector Centrality Analysis
+eigenvector_centrality = nx.eigenvector_centrality(G, weight="score", max_iter=1000)
+print("Eigenvector Centrality Scores:")
+for node, score in eigenvector_centrality.items():
+    print(f"{node}: {score:.4f}")
+
+# Convert to undirected graph for spectral clustering (required for adjacency matrix symmetry)
+G_undirected = G.to_undirected()
+
+# Spectral Clustering
+n_clusters = 4  # Number of clusters (can adjust)
+adjacency_matrix = nx.to_numpy_array(G_undirected, weight="score")
+spectral = SpectralClustering(n_clusters=n_clusters, affinity="precomputed", random_state=42)
+cluster_labels = spectral.fit_predict(adjacency_matrix)
+
+# Map cluster labels to nodes
+node_clusters = {node: label for node, label in zip(G.nodes(), cluster_labels)}
+print("\nSpectral Clustering Results:")
+for node, cluster in node_clusters.items():
+    print(f"{node}: Cluster {cluster}")
+
+# Define color mappings
+megatrend_colors = {
+    "Climate Change": "lightgreen",
+    "Decline of US-led World Order": "lightblue",
+    "Rise of Disruptive Tech": "lightyellow",
+    "Unintended Consequences of Neoliberal Economic Policies": "lightcoral"
+}
+influence_colors = {
+    "Amplifies": "red",
+    "Challenges": "blue",
+    "Drives": "green",
+    "Exposes": "purple",
+    "Mitigates": "orange"
+}
+cluster_colors = ["#FF9999", "#99CCFF", "#FFFF99", "#CC99FF"]  # Colors for clusters
+
+# Assign node sizes (based on eigenvector centrality) and colors (based on clusters)
+node_sizes = [eigenvector_centrality[node] * 3000 for node in G.nodes]  # Scale centrality to size
+node_colors = [cluster_colors[node_clusters[node]] for node in G.nodes]
+
+# Assign edge colors and widths
+edge_colors = [influence_colors[G[u][v]["influence"]] for u, v in G.edges]
+edge_widths = [G[u][v]["score"] * 5 for u, v in G.edges]
+
+# Set layout
+pos = nx.spring_layout(G, k=0.5, iterations=50)
+
+# Draw the graph
+plt.figure(figsize=(14, 10))
+nx.draw_networkx_nodes(G, pos, node_color=node_colors, node_size=node_sizes, alpha=0.8)
+nx.draw_networkx_edges(G, pos, edge_color=edge_colors, width=edge_widths, arrows=True, arrowstyle="-|>")
+nx.draw_networkx_labels(G, pos, font_size=8, font_weight="bold")
+
+# Legends
+# Megatrend legend (for reference, though nodes now use cluster colors)
+megatrend_legend = [plt.Line2D([0], [0], marker='o', color='w', label=megatrend, 
+                               markerfacecolor=color, markersize=10) 
+                    for megatrend, color in megatrend_colors.items()]
+plt.legend(handles=megatrend_legend, title="Megatrends (Original)", loc="upper left")
+
+# Influence type legend
+influence_legend = [plt.Line2D([0], [0], color=color, lw=2, label=influence) 
+                    for influence, color in influence_colors.items()]
+plt.legend(handles=influence_legend, title="Influence Types", loc="upper right")
+
+# Cluster legend
+cluster_legend = [plt.Line2D([0], [0], marker='o', color='w', label=f"Cluster {i}", 
+                             markerfacecolor=color, markersize=10) 
+                  for i, color in enumerate(cluster_colors)]
+plt.legend(handles=cluster_legend, title="Spectral Clusters", loc="lower right")
+
+# Title and display
+plt.title("Knowledge Graph with Eigenvector Centrality and Spectral Clustering", fontsize=14)
+plt.axis("off")
+plt.show()
