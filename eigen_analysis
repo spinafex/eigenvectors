@@ -1,0 +1,110 @@
+# Import required libraries
+import pandas as pd
+import networkx as nx
+import matplotlib.pyplot as plt
+import numpy as np
+from google.colab import files
+from sklearn.cluster import SpectralClustering
+import seaborn as sns
+
+# Upload the CSV file
+print("Please upload your EPU.csv file")
+uploaded = files.upload()
+
+# Read the CSV file
+df = pd.read_csv('WUI.csv')
+print("Dataframe shape:", df.shape)
+print("\nFirst few rows of the data:")
+print(df.head())
+
+# Create a correlation matrix from the components
+corr_matrix = df.corr()
+
+# Create a network graph
+G = nx.Graph()
+
+# Add nodes
+components = df.columns
+for component in components:
+    G.add_node(component)
+
+# Add edges based on correlation
+threshold = 0.3
+for i in range(len(components)):
+    for j in range(i+1, len(components)):
+        weight = abs(corr_matrix.iloc[i, j])
+        if weight > threshold:
+            G.add_edge(components[i], components[j], weight=weight)
+
+# Calculate eigenvector centrality
+eigenvector_centrality = nx.eigenvector_centrality(G)
+
+# Print eigenvector centrality scores
+print("\nEigenvector Centrality Scores:")
+for node, score in eigenvector_centrality.items():
+    print(f"{node}: {score:.4f}")
+
+# Perform spectral clustering
+affinity_matrix = 1 - np.abs(corr_matrix.values)
+n_clusters = 5
+sc = SpectralClustering(n_clusters=n_clusters, affinity='precomputed', 
+                       random_state=42)
+cluster_labels = sc.fit_predict(affinity_matrix)
+
+# Print cluster assignments
+print("\nSpectral Clustering Assignments:")
+for component, cluster in zip(components, cluster_labels):
+    print(f"{component}: Cluster {cluster}")
+
+# Correlation matrix heatmap
+plt.figure(figsize=(10, 8))
+sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', center=0, 
+           square=True, fmt='.2f', linewidths=0.5)
+plt.title('Correlation Matrix of EPU Components')
+plt.tight_layout()
+plt.show()
+
+# Visualize original network
+plt.figure(figsize=(12, 8))
+pos = nx.spring_layout(G)
+nx.draw_networkx_nodes(G, pos, node_size=500, node_color='lightblue')
+edges = G.edges()
+weights = [G[u][v]['weight']*5 for u, v in edges]
+nx.draw_networkx_edges(G, pos, width=weights)
+nx.draw_networkx_labels(G, pos, font_size=8)
+plt.title("Network Graph of EPU Components (Correlation > 0.3)")
+plt.axis('off')
+plt.tight_layout()
+plt.show()
+
+# Visualize network with spectral clustering
+plt.figure(figsize=(12, 8))
+colors = plt.cm.Set3(np.linspace(0, 1, n_clusters))
+node_colors = [colors[cluster] for cluster in cluster_labels]
+nx.draw_networkx_nodes(G, pos, node_size=500, node_color=node_colors)
+nx.draw_networkx_edges(G, pos, width=weights, alpha=0.5)
+nx.draw_networkx_labels(G, pos, font_size=8)
+plt.title(f"Network Graph with Spectral Clustering ({n_clusters} clusters)")
+plt.axis('off')
+plt.tight_layout()
+plt.show()
+
+# Eigenvector centrality bar plot
+plt.figure(figsize=(10, 6))
+plt.bar(eigenvector_centrality.keys(), eigenvector_centrality.values())
+plt.xticks(rotation=45, ha='right')
+plt.xlabel('Components')
+plt.ylabel('Eigenvector Centrality')
+plt.title('Eigenvector Centrality of EPU Components')
+plt.tight_layout()
+plt.show()
+
+# Cluster distribution bar plot
+plt.figure(figsize=(10, 6))
+unique, counts = np.unique(cluster_labels, return_counts=True)
+plt.bar(unique, counts, color=colors[:len(unique)])
+plt.xlabel('Cluster')
+plt.ylabel('Number of Components')
+plt.title('Distribution of Components Across Clusters')
+plt.tight_layout()
+plt.show()
